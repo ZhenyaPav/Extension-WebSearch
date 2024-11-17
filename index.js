@@ -208,7 +208,7 @@ async function onWebSearchPrompt(chat) {
     }
 
     // Perform URL Scraping if enabled using visitLinksAndAttachToMessage
-    if (extension_settings.websearch.urlScraping && extension_settings.websearch.urlScraping.enabled) {
+    if (extension_settings.websearch.visit_enabled) {
         await visitLinksAndAttachToMessageFromChat(chat);
     }
 

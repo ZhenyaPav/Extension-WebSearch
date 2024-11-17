@@ -113,13 +113,7 @@ const defaultSettings = {
     regex: [],
     searxng_url: '',
     searxng_preferences: '',
-    // New URL Scraping Settings
-    urlScraping: {
-        enabled: false, // Toggle URL scraping
-        maxScrapesPerMessage: 3, // Maximum number of URLs to scrape per message
-        extractTags: ['p', 'h1', 'h2', 'h3', 'li'], // HTML tags to extract text from
-        attachScrapedContentAs: 'inline', // Options: 'inline' or 'file'
-    },
+    // Removed URL Scraping Settings
 };
 
 /**
@@ -213,10 +207,9 @@ async function onWebSearchPrompt(chat) {
         return;
     }
 
-    // Perform URL Scraping if enabled
-    if (extension_settings.websearch.urlScraping.enabled) {
-        console
-        await performURLScraping(chat);
+    // Perform URL Scraping if enabled using visitLinksAndAttachToMessage
+    if (extension_settings.websearch.urlScraping && extension_settings.websearch.urlScraping.enabled) {
+        await visitLinksAndAttachToMessageFromChat(chat);
     }
 
     if (!extension_settings.websearch.enabled) {
@@ -1356,31 +1349,8 @@ jQuery(async () => {
         saveSettingsDebounced();
     });
 
-    // Initialize URL Scraping Settings
-    $('#websearch_url_scraping_enabled').prop('checked', extension_settings.websearch.urlScraping.enabled);
-    $('#websearch_url_scraping_enabled').on('change', () => {
-        extension_settings.websearch.urlScraping.enabled = !!$('#websearch_url_scraping_enabled').prop('checked');
-        saveSettingsDebounced();
-    });
-
-    $('#websearch_max_scrapes').val(extension_settings.websearch.urlScraping.maxScrapesPerMessage);
-    $('#websearch_max_scrapes').on('input', () => {
-        extension_settings.websearch.urlScraping.maxScrapesPerMessage = Number($('#websearch_max_scrapes').val());
-        saveSettingsDebounced();
-    });
-
-    $('#websearch_extract_tags').val(extension_settings.websearch.urlScraping.extractTags.join(','));
-    $('#websearch_extract_tags').on('input', () => {
-        const tags = String($('#websearch_extract_tags').val()).split(',').map(tag => tag.trim()).filter(tag => tag);
-        extension_settings.websearch.urlScraping.extractTags = tags;
-        saveSettingsDebounced();
-    });
-
-    $('input[name="websearch_attach_option"][value="' + extension_settings.websearch.urlScraping.attachScrapedContentAs + '"]').prop('checked', true);
-    $('input[name="websearch_attach_option"]').on('change', () => {
-        extension_settings.websearch.urlScraping.attachScrapedContentAs = String($('input[name="websearch_attach_option"]:checked').val());
-        saveSettingsDebounced();
-    });
+    // Initialize URL Scraping Settings (using visitLinksAndAttachToMessage)
+    // Removed fields related to websearch_extract_tags
 
     $('#websearch_regex_add').on('click', createRegexRule);
     $('#websearch_searxng_url').val(extension_settings.websearch.searxng_url);
@@ -1498,10 +1468,10 @@ jQuery(async () => {
 });
 
 /**
- * Helper function to perform URL scraping.
+ * Visits links from chat and attaches to the message using visitLinksAndAttachToMessage.
  * @param {Array} chat Chat history
  */
-async function performURLScraping(chat) {
+async function visitLinksAndAttachToMessageFromChat(chat) {
     if (!chat || !Array.isArray(chat) || chat.length === 0) {
         return;
     }
@@ -1534,104 +1504,45 @@ async function performURLScraping(chat) {
             return;
         }
 
-        const uniqueUrls = [...new Set(urls)].slice(0, extension_settings.websearch.urlScraping.maxScrapesPerMessage);
+        const uniqueUrls = [...new Set(urls)].slice(0, extension_settings.websearch.visit_count);
 
-        const scrapedContents = [];
-
-        for (const url of uniqueUrls) {
-            if (!isAllowedUrl(url)) {
-                console.debug('URL Scraping: URL is blacklisted or invalid', url);
-                continue;
-            }
-
-            const scrapedText = await scrapeWebPage(url);
-
-            if (scrapedText) {
-                scrapedContents.push({ url, text: scrapedText });
-            }
-        }
-
-        if (scrapedContents.length === 0) {
+        if (uniqueUrls.length === 0) {
             return;
         }
 
-        // Integrate scraped content based on user settings
-        if (extension_settings.websearch.urlScraping.attachScrapedContentAs === 'inline') {
-            // Prepare inline insertion
-            let inlineText = '---\n**Scraped Content:**\n';
-            scrapedContents.forEach(item => {
-                inlineText += `**URL:** ${item.url}\n`;
-                inlineText += `${item.text}\n\n`;
-            });
-            inlineText += '---';
+        const context = getContext();
+        const messageId = Number(targetMessageId);
+        const message = context.chat[messageId];
 
-            setExtensionPrompt('___WebSearch_URL_Scraping___', inlineText, extension_settings.websearch.position, extension_settings.websearch.depth);
-            console.log('URL Scraping: Inline content inserted');
-        } else if (extension_settings.websearch.urlScraping.attachScrapedContentAs === 'file') {
-            // Prepare file attachment
-            let fileContent = '';
-            scrapedContents.forEach(item => {
-                fileContent += `URL: ${item.url}\n`;
-                fileContent += `${item.text}\n\n`;
-            });
-
-            const fileName = `scraped_content_${Date.now()}.txt`;
-            const base64Data = window.btoa(unescape(encodeURIComponent(fileContent)));
-            const uniqueFileName = `${Date.now()}_${getStringHash(fileName)}.txt`;
-
-            const fileUrl = await uploadFileAttachment(uniqueFileName, base64Data);
-
-            if (fileUrl) {
-                const context = getContext();
-                const messageId = Number(targetMessageId);
-                const message = context.chat[messageId];
-
-                if (message) {
-                    message.extra = Object.assign((message.extra || {}), { file: {
-                        url: fileUrl,
-                        size: fileContent.length,
-                        name: fileName,
-                    }});
-                    const messageElement = $(`.mes[mesid="${messageId}"]`);
-
-                    if (messageElement.length > 0) {
-                        appendMediaToMessage(message, messageElement);
-                        console.log('URL Scraping: File attachment added');
-                    }
-                }
-            }
+        if (!message) {
+            console.debug('URL Scraping: Failed to find the message');
+            return;
         }
+
+        if (message?.extra?.file) {
+            console.debug('URL Scraping: Message already has a file attachment');
+            return;
+        }
+
+        if (!message.extra) {
+            message.extra = {};
+        }
+
+        if (!Array.isArray(uniqueUrls) || uniqueUrls.length === 0) {
+            console.debug('URL Scraping: No valid URLs to scrape');
+            return;
+        }
+
+        const visitResult = await visitLinksAndAttachToMessage('URL Scraping', uniqueUrls, messageId);
+
+        if (visitResult && visitResult.file) {
+            message.extra.file = Object.assign((message.extra || {}), visitResult.file);
+            message.mes = await appendFileContent(message, message.mes);
+        }
+
     } catch (error) {
         console.error('URL Scraping: Error during scraping', error);
     } finally {
         console.log('URL Scraping: Finished in', Date.now() - startTime, 'ms');
-    }
-}
-
-/**
- * Scrapes a webpage and extracts text based on configured tags.
- * @param {string} url The URL of the webpage to scrape.
- * @returns {Promise<string>} Extracted text from the webpage.
- */
-async function scrapeWebPage(url) {
-    try {
-        const response = await fetch('/api/search/visit', {
-            method: 'POST',
-            headers: getRequestHeaders(),
-            body: JSON.stringify({ url }),
-        });
-
-        if (!response.ok) {
-            console.debug(`URL Scraping: scrape request failed with status ${response.statusText}`, url);
-            return '';
-        }
-
-        const blob = await response.blob();
-        const extractedText = await extractTextFromHTML(blob, extension_settings.websearch.urlScraping.extractTags.join(','));
-        console.debug('URL Scraping: scrape result', url, extractedText);
-        return extractedText;
-    } catch (error) {
-        console.error('URL Scraping: scrape failed', error);
-        return '';
     }
 }

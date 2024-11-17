@@ -215,9 +215,10 @@ async function onWebSearchPrompt(chat) {
 
     // Perform URL Scraping if enabled
     if (extension_settings.websearch.urlScraping.enabled) {
+        console
         await performURLScraping(chat);
     }
-    
+
     if (!extension_settings.websearch.enabled) {
         console.debug('WebSearch: extension is disabled');
         return;
@@ -1508,21 +1509,26 @@ async function performURLScraping(chat) {
     const startTime = Date.now();
 
     try {
-        // Find the latest user message
+        // Initialize variables to capture userMessage and its ID
         let userMessage = null;
+        let targetMessageId = null;
 
-        for (let message of chat.slice().reverse()) {
-            if (message.is_system) continue;
-            if (message.mes && message.is_user) {
-                userMessage = message.mes;
+        // Iterate through the chat in reverse to find the latest user message
+        for (let msg of chat.slice().reverse()) {
+            if (msg.is_system) continue;
+            if (msg.mes && msg.is_user) {
+                userMessage = msg.mes;
+                targetMessageId = msg.index; // Ensure 'index' is the correct property for message ID
                 break;
             }
         }
 
-        if (!userMessage) {
+        if (!userMessage || targetMessageId === null) {
+            console.debug('URL Scraping: No user message found');
             return;
         }
 
+        // Extract URLs from the user message
         const urls = userMessage.match(/https?:\/\/[^\s]+/g); // Simple regex to detect URLs
         if (!urls || urls.length === 0) {
             return;
@@ -1577,7 +1583,7 @@ async function performURLScraping(chat) {
 
             if (fileUrl) {
                 const context = getContext();
-                const messageId = Number(message.index);
+                const messageId = Number(targetMessageId);
                 const message = context.chat[messageId];
 
                 if (message) {

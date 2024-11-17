@@ -1499,7 +1499,7 @@ async function visitLinksAndAttachToMessageFromChat(chat) {
         }
 
         // Extract URLs from the user message
-        const urls = userMessage.match(new RegExp('^(http:\/\/www\.|https:\/\/www\.|http:\/\/|https:\/\/)?[a-z0-9]+([\-\.]{1}[a-z0-9]+)*\.[a-z]{2,5}(:[0-9]{1,5})?(\/.*)?$')); // Simple regex to detect URLs
+        const urls = userMessage.match(new RegExp(/\b(https?):\/\/\S+/)); // Simple regex to detect URLs
         if (!urls || urls.length === 0) {
             console.debug('URL Scraping: No URLs found')
             return;

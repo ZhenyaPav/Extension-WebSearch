@@ -213,6 +213,11 @@ async function onWebSearchPrompt(chat) {
         return;
     }
 
+    // Perform URL Scraping if enabled
+    if (extension_settings.websearch.urlScraping.enabled) {
+        await performURLScraping(chat);
+    }
+    
     if (!extension_settings.websearch.enabled) {
         console.debug('WebSearch: extension is disabled');
         return;
@@ -299,6 +304,7 @@ async function onWebSearchPrompt(chat) {
         const extensionPrompt = substituteParamsExtended(template, { text: text, query: searchQuery });
         setExtensionPrompt(extensionPromptMarker, extensionPrompt, extension_settings.websearch.position, extension_settings.websearch.depth);
         console.log('WebSearch: prompt updated', extensionPrompt);
+
     } catch (error) {
         console.error('WebSearch: error while processing the request', error);
     } finally {
@@ -1486,22 +1492,15 @@ jQuery(async () => {
         context.registerDataBankScraper(new WebSearchScraper());
     }
 
-    // Register URL Scraping Interceptor
-    window['URL_Scrape_Intercept'] = onURLScrapeIntercept;
-
-    // Assuming multiple interceptors are supported
+    // Register WebSearch Interceptor
     window['WebSearch_Intercept'] = onWebSearchPrompt;
 });
 
 /**
- * Intercepts messages to detect URLs and scrape content.
+ * Helper function to perform URL scraping.
  * @param {Array} chat Chat history
  */
-async function onURLScrapeIntercept(chat) {
-    if (!extension_settings.websearch.urlScraping.enabled) {
-        return;
-    }
-
+async function performURLScraping(chat) {
     if (!chat || !Array.isArray(chat) || chat.length === 0) {
         return;
     }
@@ -1604,9 +1603,9 @@ async function onURLScrapeIntercept(chat) {
 }
 
 /**
- * Scrapes the content of a web page from a given URL.
- * @param {string} url URL of the web page to scrape
- * @returns {Promise<string>} Extracted text content
+ * Scrapes a webpage and extracts text based on configured tags.
+ * @param {string} url The URL of the webpage to scrape.
+ * @returns {Promise<string>} Extracted text from the webpage.
  */
 async function scrapeWebPage(url) {
     try {
@@ -1617,16 +1616,16 @@ async function scrapeWebPage(url) {
         });
 
         if (!response.ok) {
-            console.debug(`URL Scraping: Failed to fetch ${url} - Status ${response.status}`);
+            console.debug(`URL Scraping: scrape request failed with status ${response.statusText}`, url);
             return '';
         }
 
-        const data = await response.blob();
-        const extractedText = await extractTextFromHTML(data, extension_settings.websearch.urlScraping.extractTags);
-        console.debug('URL Scraping: Extracted text from', url);
+        const blob = await response.blob();
+        const extractedText = await extractTextFromHTML(blob, extension_settings.websearch.urlScraping.extractTags.join(','));
+        console.debug('URL Scraping: scrape result', url, extractedText);
         return extractedText;
     } catch (error) {
-        console.error('URL Scraping: Error fetching URL', url, error);
+        console.error('URL Scraping: scrape failed', error);
         return '';
     }
 }

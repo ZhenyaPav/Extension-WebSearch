@@ -1630,30 +1630,3 @@ async function scrapeWebPage(url) {
         return '';
     }
 }
-
-/**
- * Extracts text content from HTML based on specified tags.
- * @param {Blob} htmlBlob HTML content as a Blob
- * @param {string[]} tags Array of HTML tags to extract text from
- * @returns {Promise<string>} Extracted text
- */
-async function extractTextFromHTML(htmlBlob, tags = ['p']) {
-    try {
-        const htmlText = await htmlBlob.text();
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(htmlText, 'text/html');
-        let extractedText = '';
-
-        tags.forEach(tag => {
-            const elements = doc.querySelectorAll(tag);
-            elements.forEach(el => {
-                extractedText += el.textContent.trim() + '\n';
-            });
-        });
-
-        return extractedText.trim();
-    } catch (error) {
-        console.error('extractTextFromHTML: Failed to extract text', error);
-        return '';
-    }
-}
